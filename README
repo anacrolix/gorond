@@ -1,0 +1,5 @@
+gorond currently just groups and orders package imports. Invoke it with module paths to operate on, like `./...`. The groups are std, non-local (not the current module), and then local (a package belonging to the current module) in that order reading from top to bottom. gorond will operate on all the Go source files in every package it reaches.
+
+Installation
+
+	go install github.com/anacrolix/gorond/cmd/gorond@latest
