@@ -10,9 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"golang.org/x/tools/go/packages"
-
 	"github.com/anacrolix/bargle"
+	"golang.org/x/tools/go/packages"
 )
 
 func main() {
