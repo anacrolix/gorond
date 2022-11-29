@@ -127,7 +127,7 @@ func emptyImportSpec() *ast.ImportSpec {
 
 func groupImports(all []*ast.ImportSpec, stdPkgs map[string]bool, localModule string) (groups importGroups) {
 	for _, imp := range all {
-		log.Printf("%q", imp.Path.Value)
+		//log.Printf("%q", imp.Path.Value)
 		path := pathFromSpec(imp)
 		if stdPkgs[path] {
 			groups.std = append(groups.std, imp)
