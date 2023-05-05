@@ -39,11 +39,18 @@ func mainErr() error {
 	for _, pkg := range stdPackages {
 		stdPkgPaths[pkg.PkgPath] = true
 	}
-	pkgs, err := packages.Load(&packages.Config{Mode: packages.NeedModule | packages.NeedFiles}, pkgPattern)
+	pkgs, err := packages.Load(
+		&packages.Config{
+			Mode:  packages.NeedModule | packages.NeedFiles,
+			Tests: true,
+		},
+		pkgPattern,
+	)
 	if err != nil {
 		return err
 	}
 	for _, pkg := range pkgs {
+		log.Printf("grouping imports for %q", pkg.PkgPath)
 		err := groupPackageImports(pkg, stdPkgPaths)
 		if err != nil {
 			return err
@@ -56,16 +63,20 @@ func mainErr() error {
 func groupPackageImports(pkg *packages.Package, stdPkgPaths map[string]bool) error {
 	module := pkg.Module
 	fileSet := token.NewFileSet()
-	for _, filePath := range pkg.GoFiles {
-		file, err := parser.ParseFile(fileSet, filePath, nil, parser.ParseComments)
-		if err != nil {
-			return err
+	log.Printf("ignored files: %q", pkg.IgnoredFiles)
+	for _, fileSlice := range [][]string{pkg.GoFiles} {
+		for _, filePath := range fileSlice {
+			file, err := parser.ParseFile(fileSet, filePath, nil, parser.ParseComments)
+			if err != nil {
+				return err
+			}
+			err = fixFile(file, stdPkgPaths, module, filePath, fileSet)
+			if err != nil {
+				return err
+			}
+			//break
 		}
-		err = fixFile(file, stdPkgPaths, module, filePath, fileSet)
-		if err != nil {
-			return err
-		}
-		//break
+
 	}
 	return nil
 
