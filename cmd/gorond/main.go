@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -41,7 +44,7 @@ func mainErr() error {
 	}
 	pkgs, err := packages.Load(
 		&packages.Config{
-			Mode:  packages.NeedModule | packages.NeedFiles,
+			Mode:  packages.NeedModule | packages.NeedFiles | packages.NeedName,
 			Tests: true,
 		},
 		pkgPattern,
@@ -50,12 +53,14 @@ func mainErr() error {
 		return err
 	}
 	for _, pkg := range pkgs {
-		log.Printf("grouping imports for %q", pkg.PkgPath)
+		log.Println(pkg.Name, pkg.PkgPath)
+		if strings.HasSuffix(pkg.PkgPath, ".test") {
+			continue
+		}
 		err := groupPackageImports(pkg, stdPkgPaths)
 		if err != nil {
 			return err
 		}
-		//break
 	}
 	return nil
 }
@@ -64,8 +69,9 @@ func groupPackageImports(pkg *packages.Package, stdPkgPaths map[string]bool) err
 	module := pkg.Module
 	fileSet := token.NewFileSet()
 	log.Printf("ignored files: %q", pkg.IgnoredFiles)
-	for _, fileSlice := range [][]string{pkg.GoFiles} {
+	for _, fileSlice := range [][]string{pkg.GoFiles, pkg.IgnoredFiles} {
 		for _, filePath := range fileSlice {
+			log.Print(filePath)
 			file, err := parser.ParseFile(fileSet, filePath, nil, parser.ParseComments)
 			if err != nil {
 				return err
@@ -82,7 +88,13 @@ func groupPackageImports(pkg *packages.Package, stdPkgPaths map[string]bool) err
 
 }
 
-func fixFile(file *ast.File, stdPkgPaths map[string]bool, module *packages.Module, filePath string, fileSet *token.FileSet) error {
+func fixFile(
+	file *ast.File,
+	stdPkgPaths map[string]bool,
+	module *packages.Module,
+	filePath string,
+	fileSet *token.FileSet,
+) (err error) {
 	for _, decl := range file.Decls {
 		gen, ok := decl.(*ast.GenDecl)
 		if !ok {
@@ -109,13 +121,31 @@ func fixFile(file *ast.File, stdPkgPaths map[string]bool, module *packages.Modul
 			gen.Specs = append(gen.Specs, imp)
 		}
 	}
-	outFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_TRUNC, 0)
+	var proposed bytes.Buffer
+	err = format.Node(&proposed, fileSet, file)
 	if err != nil {
-		return err
+		return
 	}
-	defer outFile.Close()
-	log.Printf("fixing %q", filePath)
-	return format.Node(outFile, fileSet, file)
+	existing, err := os.ReadFile(filePath)
+	if err != nil {
+		return
+	}
+	if bytes.Compare(existing, proposed.Bytes()) == 0 {
+		return
+	}
+	fmt.Println(filePath)
+	tmpFile, err := os.CreateTemp("", "gorond")
+	if err != nil {
+		return
+	}
+	defer tmpFile.Close()
+	_, err = io.Copy(tmpFile, &proposed)
+	if err != nil {
+		os.Remove(tmpFile.Name())
+		return
+	}
+	err = os.Rename(tmpFile.Name(), filePath)
+	return
 }
 
 func pathFromSpec(spec *ast.ImportSpec) string {
