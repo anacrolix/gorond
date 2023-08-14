@@ -3,17 +3,17 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/anacrolix/log"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
 	"io"
-	"log"
 	"os"
 	"sort"
 	"strings"
 
-	"github.com/anacrolix/bargle"
+	args "github.com/anacrolix/bargle"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -24,11 +24,19 @@ func main() {
 	}
 }
 
+var logger = log.Default.WithNames("gorond").WithDefaultLevel(log.Debug)
+
 func mainErr() error {
 	argParser := args.NewParser()
-	var pkgPattern string
-	if !argParser.Parse(args.Positional(args.String(&pkgPattern))) {
-		return argParser.Fail()
+	var pkgPatterns []string
+
+parse:
+	for {
+		switch {
+		case argParser.Parse(args.Positional(args.AppendSlice(&pkgPatterns, args.String))):
+		default:
+			break parse
+		}
 	}
 	argParser.FailIfArgsRemain()
 	if argParser.Err() != nil {
@@ -47,13 +55,13 @@ func mainErr() error {
 			Mode:  packages.NeedModule | packages.NeedFiles | packages.NeedName,
 			Tests: true,
 		},
-		pkgPattern,
+		pkgPatterns...,
 	)
 	if err != nil {
 		return err
 	}
 	for _, pkg := range pkgs {
-		log.Println(pkg.Name, pkg.PkgPath)
+		logger.Levelf(log.Debug, pkg.Name, pkg.PkgPath)
 		if strings.HasSuffix(pkg.PkgPath, ".test") {
 			continue
 		}
@@ -68,10 +76,10 @@ func mainErr() error {
 func groupPackageImports(pkg *packages.Package, stdPkgPaths map[string]bool) error {
 	module := pkg.Module
 	fileSet := token.NewFileSet()
-	log.Printf("ignored files: %q", pkg.IgnoredFiles)
+	logger.Printf("ignored files: %q", pkg.IgnoredFiles)
 	for _, fileSlice := range [][]string{pkg.GoFiles, pkg.IgnoredFiles} {
 		for _, filePath := range fileSlice {
-			log.Print(filePath)
+			logger.Print(filePath)
 			file, err := parser.ParseFile(fileSet, filePath, nil, parser.ParseComments)
 			if err != nil {
 				return err
