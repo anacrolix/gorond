@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/anacrolix/log"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	args "github.com/anacrolix/bargle"
+	"github.com/anacrolix/log"
 	"golang.org/x/tools/go/packages"
 )
 
